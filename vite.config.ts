@@ -4,6 +4,9 @@ import { VitePWA } from 'vite-plugin-pwa';
 import path from 'path';
 
 export default defineConfig({
+  // GitHub Pages base path
+  base: '/AgroEye/',
+
   publicDir: 'public',
 
   plugins: [
@@ -17,24 +20,25 @@ export default defineConfig({
       },
 
       manifest: {
-        id: '/',
+        id: '/AgroEye/',
         name: 'AgroEye',
         short_name: 'AgroEye',
         description: 'Smart Paddy Monitoring System',
         theme_color: '#16a34a',
         background_color: '#ffffff',
         display: 'standalone',
-        start_url: '/',
-        scope: '/',
+
+        start_url: '/AgroEye/',
+        scope: '/AgroEye/',
 
         icons: [
           {
-            src: '/pwa-192x192.png',
+            src: '/AgroEye/pwa-192x192.png',
             sizes: '192x192',
             type: 'image/png',
           },
           {
-            src: '/pwa-512x512.png',
+            src: '/AgroEye/pwa-512x512.png',
             sizes: '512x512',
             type: 'image/png',
           },
@@ -80,7 +84,6 @@ export default defineConfig({
       '@radix-ui/react-context-menu@2.2.2': '@radix-ui/react-context-menu',
       '@radix-ui/react-collapsible@1.1.3': '@radix-ui/react-collapsible',
       '@radix-ui/react-checkbox@1.1.4': '@radix-ui/react-checkbox',
-      '@radix-ui/react-avatar@1.1.3': '@radix-ui/react-avatar',
       '@radix-ui/react-aspect-ratio@1.1.2': '@radix-ui/react-aspect-ratio',
 
       '@': path.resolve(__dirname, './src'),
