@@ -34,6 +34,8 @@ jobs:
         run: npm ci
 
       - name: Build AgroEye
+        env:
+          VITE_GEMINI_API_KEY: ${{ secrets.VITE_GEMINI_API_KEY }}
         run: npm run build
 
       - name: Setup Pages
