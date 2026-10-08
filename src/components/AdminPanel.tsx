@@ -1581,9 +1581,9 @@ export function AdminPanel() {
                       </Button>
                     </DialogTrigger>
 
-                    <DialogContent className="max-h-[90vh] overflow-y-auto">
+                    <DialogContent style={{ display: 'flex', flexDirection: 'column', maxHeight: '90vh', overflow: 'hidden' }}>
 
-                      <DialogHeader>
+                      <DialogHeader style={{ flexShrink: 0 }}>
 
                         <DialogTitle>
                           Add Image Dataset
@@ -1595,7 +1595,7 @@ export function AdminPanel() {
 
                       </DialogHeader>
 
-                      <div className="space-y-4 py-4">
+                      <div className="space-y-4 py-4" style={{ overflowY: 'auto', flex: '1 1 auto', minHeight: 0, paddingRight: '2px' }}>
 
                         <div>
 
@@ -2192,7 +2192,7 @@ export function AdminPanel() {
 
                       </div>
 
-                      <div className="flex justify-end gap-3">
+                      <div className="flex justify-end gap-3" style={{ flexShrink: 0, borderTop: '1px solid #dcfce7', paddingTop: '12px', marginTop: '4px' }}>
 
                         <Button
                           variant="outline"

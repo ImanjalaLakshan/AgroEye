@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { Button } from './ui/button';
 import {
   LayoutDashboard,
   Map,
@@ -11,12 +10,14 @@ import {
   X,
   LogOut,
   Shield,
+  ChevronRight,
 } from 'lucide-react';
 import { Dashboard } from './Dashboard';
 import { SensorMonitoring } from './SensorMonitoring';
 import { AlertsNotifications } from './AlertsNotifications';
 import { AdminPanel } from './AdminPanel';
 import { Settings as SettingsPage } from './Settings';
+import { auth } from '../firebase';
 
 type View = 'dashboard' | 'sensors' | 'alerts' | 'admin' | 'settings';
 
@@ -26,11 +27,37 @@ interface MainLayoutProps {
   toggleDarkMode: () => void;
 }
 
+const viewLabels: Record<View, string> = {
+  dashboard: 'Dashboard',
+  sensors: 'Sensors',
+  alerts: 'Alerts',
+  admin: 'Admin Panel',
+  settings: 'Settings',
+};
+
+const viewSubtitles: Record<View, string> = {
+  dashboard: 'Monitor your crops, field and environment for a healthier harvest.',
+  sensors: 'View and manage your IoT sensor data in real-time.',
+  alerts: "Stay informed about your farm's condition.",
+  admin: 'Manage datasets, users and system settings.',
+  settings: 'Manage your account and application preferences.',
+};
+
 export function MainLayout({ onLogout, darkMode, toggleDarkMode }: MainLayoutProps) {
   const [currentView, setCurrentView] = useState<View>('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const menuItems = [
+  const user = auth.currentUser;
+  const displayName = user?.displayName || user?.email?.split('@')[0] || 'User';
+  const initials = displayName.slice(0, 2).toUpperCase();
+
+  const today = new Date().toLocaleDateString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+
+  const navItems = [
     { id: 'dashboard' as View, label: 'Dashboard', icon: LayoutDashboard },
     { id: 'sensors' as View, label: 'Sensors', icon: Radio },
     { id: 'alerts' as View, label: 'Alerts', icon: Bell },
@@ -39,124 +66,267 @@ export function MainLayout({ onLogout, darkMode, toggleDarkMode }: MainLayoutPro
 
   const renderView = () => {
     switch (currentView) {
-      case 'dashboard':
-        return <Dashboard />;
-      case 'sensors':
-        return <SensorMonitoring />;
-      case 'alerts':
-        return <AlertsNotifications />;
-      case 'admin':
-        return <AdminPanel />;
-      case 'settings':
-        return <SettingsPage darkMode={darkMode} toggleDarkMode={toggleDarkMode} />;
-      default:
-        return <Dashboard />;
+      case 'dashboard': return <Dashboard />;
+      case 'sensors': return <SensorMonitoring />;
+      case 'alerts': return <AlertsNotifications />;
+      case 'admin': return <AdminPanel />;
+      case 'settings': return <SettingsPage darkMode={darkMode} toggleDarkMode={toggleDarkMode} />;
+      default: return <Dashboard />;
     }
   };
 
+  const navigate = (view: View) => {
+    setCurrentView(view);
+    setSidebarOpen(false);
+  };
+
+  const sidebarBg = '#14532d';
+  const sidebarActive = '#16a34a';
+  const sidebarText = '#86efac';
+  const sidebarTextActive = '#ffffff';
+
   return (
-    <div className="min-h-screen bg-green-50">
-      {/* Mobile Sidebar Overlay */}
+    <div className="agro-shell" style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#f0fdf4', fontFamily: 'Inter, system-ui, sans-serif' }}>
+
+      {/* Mobile overlay */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
           onClick={() => setSidebarOpen(false)}
+          style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 40 }}
         />
       )}
 
-      {/* Sidebar */}
-      <aside
-        className={`fixed top-0 left-0 h-full bg-white border-r border-green-100 z-50 transition-transform duration-300 ${
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        } lg:translate-x-0 w-64`}
-      >
-        <div className="flex flex-col h-full">
-          {/* Logo */}
-          <div className="p-6 border-b border-green-100 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-green-600 rounded-lg flex items-center justify-center">
-                <Sprout className="w-6 h-6 text-white" />
-              </div>
-              <span className="text-green-800">AgroEye</span>
+      {/* ─── Sidebar ─── */}
+      <aside className="agro-sidebar" style={{
+        position: 'fixed', top: 0, left: 0, height: '100%',
+        width: '220px',
+        backgroundColor: sidebarBg,
+        display: 'flex', flexDirection: 'column',
+        zIndex: 50,
+        transition: 'transform 0.25s ease',
+        transform: sidebarOpen ? 'translateX(0)' : undefined,
+        boxShadow: '4px 0 20px rgba(0,0,0,0.2)',
+      }}>
+        {/* Logo */}
+        <div style={{
+          padding: '22px 18px 18px',
+          borderBottom: '1px solid rgba(255,255,255,0.1)',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{
+              width: '38px', height: '38px', borderRadius: '10px',
+              backgroundColor: sidebarActive,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
+            }}>
+              <Sprout style={{ width: '22px', height: '22px', color: '#fff' }} />
             </div>
-            <button className="lg:hidden" onClick={() => setSidebarOpen(false)}>
-              <X className="w-6 h-6 text-green-600" />
-            </button>
+            <div>
+              <div style={{ color: '#fff', fontWeight: 700, fontSize: '16px' }}>AgroEye</div>
+              <div style={{ color: sidebarText, fontSize: '10px' }}>Smart Farming Monitor</div>
+            </div>
           </div>
+          <button
+            onClick={() => setSidebarOpen(false)}
+            style={{ color: sidebarText, background: 'none', border: 'none', cursor: 'pointer', padding: '4px', display: sidebarOpen ? 'block' : 'none' }}
+          >
+            <X style={{ width: '18px', height: '18px' }} />
+          </button>
+        </div>
 
-          {/* Menu Items */}
-          <nav className="flex-1 p-4 space-y-2">
-            {menuItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = currentView === item.id;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => {
-                    setCurrentView(item.id);
-                    setSidebarOpen(false);
-                  }}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                    isActive
-                      ? 'bg-green-600 text-white'
-                      : 'text-green-700 hover:bg-green-50'
-                  }`}
-                >
-                  <Icon className="w-5 h-5" />
-                  <span>{item.label}</span>
-                </button>
-              );
-            })}
-          </nav>
+        {/* Nav */}
+        <nav style={{ flex: 1, padding: '14px 10px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+          {navItems.map(({ id, label, icon: Icon }) => {
+            const active = currentView === id;
+            return (
+              <button
+                key={id}
+                onClick={() => navigate(id)}
+                style={{
+                  width: '100%', display: 'flex', alignItems: 'center', gap: '11px',
+                  padding: '10px 13px', borderRadius: '9px', border: 'none', cursor: 'pointer',
+                  backgroundColor: active ? sidebarActive : 'transparent',
+                  color: active ? sidebarTextActive : sidebarText,
+                  fontWeight: active ? 600 : 400,
+                  fontSize: '13.5px',
+                  transition: 'background 0.15s, color 0.15s',
+                  textAlign: 'left',
+                  boxShadow: active ? '0 2px 8px rgba(22,163,74,0.4)' : 'none',
+                }}
+              >
+                <Icon style={{ width: '17px', height: '17px', flexShrink: 0 }} />
+                <span style={{ flex: 1 }}>{label}</span>
+                {active && <ChevronRight style={{ width: '13px', height: '13px', opacity: 0.7 }} />}
+              </button>
+            );
+          })}
+        </nav>
 
-          {/* User Info & Logout */}
-          <div className="p-4 border-t border-green-100 space-y-2">
-            <button
-              onClick={() => {
-                setCurrentView('settings');
-                setSidebarOpen(false);
-              }}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                currentView === 'settings'
-                  ? 'bg-green-600 text-white'
-                  : 'text-green-700 hover:bg-green-50'
-              }`}
-            >
-              <Settings className="w-5 h-5" />
-              <span>Settings</span>
-            </button>
-            <button
-              onClick={onLogout}
-              className="w-full flex items-center gap-3 px-4 py-3 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-            >
-              <LogOut className="w-5 h-5" />
-              <span>Logout</span>
-            </button>
+        {/* Bottom */}
+        <div style={{ padding: '10px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+          {/* Settings */}
+          <button
+            onClick={() => navigate('settings')}
+            style={{
+              width: '100%', display: 'flex', alignItems: 'center', gap: '11px',
+              padding: '10px 13px', borderRadius: '9px', border: 'none', cursor: 'pointer',
+              backgroundColor: currentView === 'settings' ? sidebarActive : 'transparent',
+              color: currentView === 'settings' ? sidebarTextActive : sidebarText,
+              fontWeight: currentView === 'settings' ? 600 : 400,
+              fontSize: '13.5px', transition: 'background 0.15s', textAlign: 'left', marginBottom: '2px',
+            }}
+          >
+            <Settings style={{ width: '17px', height: '17px' }} />
+            <span>Settings</span>
+          </button>
+
+          {/* Logout */}
+          <button
+            onClick={onLogout}
+            style={{
+              width: '100%', display: 'flex', alignItems: 'center', gap: '11px',
+              padding: '10px 13px', borderRadius: '9px', border: 'none', cursor: 'pointer',
+              backgroundColor: 'transparent', color: '#fca5a5',
+              fontSize: '13.5px', transition: 'background 0.15s', textAlign: 'left',
+            }}
+          >
+            <LogOut style={{ width: '17px', height: '17px' }} />
+            <span>Logout</span>
+          </button>
+
+          {/* User card */}
+          <div style={{
+            marginTop: '10px', padding: '10px 11px', borderRadius: '9px',
+            backgroundColor: 'rgba(255,255,255,0.07)',
+            display: 'flex', alignItems: 'center', gap: '9px',
+          }}>
+            <div style={{
+              width: '32px', height: '32px', borderRadius: '50%',
+              backgroundColor: sidebarActive,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: '#fff', fontWeight: 700, fontSize: '12px', flexShrink: 0,
+            }}>
+              {initials}
+            </div>
+            <div style={{ overflow: 'hidden' }}>
+              <div style={{ color: '#fff', fontSize: '12px', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {displayName}
+              </div>
+              <div style={{ color: sidebarText, fontSize: '10px' }}>Farmer</div>
+            </div>
           </div>
         </div>
       </aside>
 
-      {/* Main Content */}
-      <div className="lg:ml-64">
-        {/* Top Bar - Only show on mobile */}
-        <header className="bg-white border-b border-green-100 p-4 lg:hidden sticky top-0 z-30">
-          <div className="flex items-center justify-between">
-            <button onClick={() => setSidebarOpen(true)}>
-              <Menu className="w-6 h-6 text-green-600" />
+      {/* ─── Main area ─── */}
+      <div className="agro-main" style={{ flex: 1, marginLeft: '220px', display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+
+        {/* Top Header */}
+        <header className="agro-header" style={{
+          position: 'sticky', top: 0, zIndex: 30,
+          backgroundColor: '#fff',
+          borderBottom: '1px solid #dcfce7',
+          padding: '0 24px',
+          height: '62px',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          boxShadow: '0 1px 6px rgba(0,0,0,0.05)',
+        }}>
+          {/* Left */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            {/* Hamburger — mobile */}
+            <button
+              onClick={() => setSidebarOpen(true)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#15803d', padding: '5px', display: 'none' }}
+              className="mobile-hamburger"
+            >
+              <Menu style={{ width: '22px', height: '22px' }} />
             </button>
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-green-600 rounded-lg flex items-center justify-center">
-                <Sprout className="w-5 h-5 text-white" />
+
+            <div>
+              <div style={{ fontSize: '17px', fontWeight: 700, color: '#14532d', lineHeight: 1.2 }}>
+                {viewLabels[currentView]}
               </div>
-              <span className="text-green-800">AgroEye</span>
+              <div style={{ fontSize: '11px', color: '#9ca3af', lineHeight: 1 }}>
+                {viewSubtitles[currentView]}
+              </div>
             </div>
-            <div className="w-6" /> {/* Spacer for centering */}
+          </div>
+
+          {/* Right */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            {/* Date chip */}
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: '5px',
+              backgroundColor: '#f0fdf4', padding: '5px 11px', borderRadius: '7px',
+              border: '1px solid #bbf7d0',
+            }}>
+              <Map style={{ width: '13px', height: '13px', color: '#16a34a' }} />
+              <span style={{ fontSize: '12px', fontWeight: 600, color: '#15803d' }}>{today}</span>
+            </div>
+
+            {/* Bell */}
+            <button
+              onClick={() => navigate('alerts')}
+              style={{ position: 'relative', background: 'none', border: 'none', cursor: 'pointer', padding: '6px', color: '#15803d' }}
+            >
+              <Bell style={{ width: '19px', height: '19px' }} />
+              <span style={{
+                position: 'absolute', top: '3px', right: '3px',
+                width: '7px', height: '7px', borderRadius: '50%',
+                backgroundColor: '#ef4444', border: '1.5px solid #fff',
+              }} />
+            </button>
+
+            {/* Avatar */}
+            <div
+              onClick={() => navigate('settings')}
+              style={{
+                width: '35px', height: '35px', borderRadius: '50%',
+                backgroundColor: '#16a34a',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: '#fff', fontWeight: 700, fontSize: '13px',
+                cursor: 'pointer',
+                boxShadow: '0 2px 6px rgba(22,163,74,0.3)',
+              }}
+            >
+              {initials}
+            </div>
           </div>
         </header>
 
-        {/* Current View */}
-        <div>{renderView()}</div>
+        {/* Page content */}
+        <main className="agro-content" style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
+          {renderView()}
+        </main>
+
+        {/* Footer */}
+        <footer style={{
+          textAlign: 'center', padding: '8px',
+          fontSize: '11px', color: '#9ca3af',
+          borderTop: '1px solid #f3f4f6',
+          backgroundColor: '#fff',
+        }}>
+          Better Insights for a Greener Tomorrow · AgroEye v1.0.0
+        </footer>
       </div>
+
+      <style>{`
+        .agro-shell { width: 100%; min-width: 0; }
+        .agro-main, .agro-content { min-width: 0; }
+        @media (max-width: 1023px) {
+          .agro-sidebar { transform: ${sidebarOpen ? 'translateX(0)' : 'translateX(-105%)'} !important; }
+          .agro-main { margin-left: 0 !important; width: 100%; }
+          .mobile-hamburger { display: flex !important; }
+        }
+        @media (max-width: 640px) {
+          .agro-header { padding: 0 12px !important; gap: 8px; }
+          .agro-header > div { min-width: 0; }
+          .agro-header > div:first-child > div:last-child > div:last-child { display: none; }
+          .agro-header > div:last-child > div:first-child { display: none !important; }
+          .agro-content { overflow-x: hidden; }
+        }
+      `}</style>
     </div>
   );
 }
