@@ -251,7 +251,6 @@ export function Dashboard() {
         <div style={{
           backgroundColor: '#fff', borderRadius: '14px', padding: '20px', minWidth: 0,
           boxShadow: '0 1px 6px rgba(0,0,0,0.07)', border: '1px solid #f1f5f9',
-          minWidth: 0,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
             <div style={{
