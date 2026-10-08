@@ -1,40 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ref, onValue } from 'firebase/database';
 import { db, auth } from '../firebase';
-
 import {
-  Thermometer,
-  Droplets,
-  Gauge,
-  AlertTriangle,
-  CheckCircle2,
-  Sprout,
-  Wind,
-  MapPin,
-  Wifi,
-  Activity,
-  ShieldCheck,
-  Clock3,
-  Leaf,
-  TrendingUp,
+  Thermometer, Droplets, Gauge, AlertTriangle, CheckCircle2,
+  Sprout, Wind, MapPin, Wifi, Activity, ShieldCheck,
+  Clock3, Leaf, TrendingUp
 } from 'lucide-react';
-
 import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Legend,
+  LineChart, Line, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer, Legend
 } from 'recharts';
 
-/* =========================================================
-   Types
-========================================================= */
-
 type AlertType = 'high' | 'medium' | 'normal';
+type DeviceState = 'Online' | 'Offline' | 'Unknown';
 
 interface AlertItem {
   type: AlertType;
@@ -50,27 +28,39 @@ interface SensorData {
   lng: number;
 }
 
-interface HistoryItem {
+interface HistoryItem extends SensorData {
   time: string;
-  temp: number;
-  moisture: number;
-  waterLevel: number;
-  humidity: number;
 }
 
-/* =========================================================
-   Small Components
-========================================================= */
+const HEARTBEAT_TIMEOUT_MS = 60000;
+
+const cardStyle: React.CSSProperties = {
+  background: '#ffffff',
+  border: '1px solid #e5e7eb',
+  borderRadius: '18px',
+  padding: '20px',
+  boxShadow: '0 3px 12px rgba(15,23,42,0.05)',
+  minWidth: 0,
+};
+
+const titleStyle: React.CSSProperties = {
+  fontSize: '14px',
+  fontWeight: 700,
+  color: '#0f172a',
+};
+
+function getGreeting() {
+  const hour = new Date().getHours();
+
+  if (hour >= 5 && hour < 12) return 'Good Morning ☀️';
+  if (hour >= 12 && hour < 17) return 'Good Afternoon 🌤️';
+  if (hour >= 17 && hour < 21) return 'Good Evening 🌇';
+  return 'Good Night 🌙';
+}
 
 function StatCard({
-  label,
-  value,
-  unit,
-  icon: Icon,
-  iconColor,
-  iconBg,
-  status,
-  statusColor,
+  label, value, unit, icon: Icon, iconColor, iconBg,
+  status, statusColor
 }: {
   label: string;
   value: number;
@@ -82,110 +72,76 @@ function StatCard({
   statusColor: string;
 }) {
   return (
-    <div
-      style={{
-        background: '#ffffff',
-        border: '1px solid #e5e7eb',
-        borderRadius: '18px',
-        padding: '20px',
-        minHeight: '125px',
-        boxShadow: '0 3px 12px rgba(15, 23, 42, 0.05)',
-        transition: 'all 0.2s ease',
+    <div style={{
+      ...cardStyle,
+      minHeight: '125px',
+      display: 'flex',
+      flexDirection: 'column',
+      justifyContent: 'space-between'
+    }}>
+      <div style={{
         display: 'flex',
-        flexDirection: 'column',
         justifyContent: 'space-between',
-      }}
-    >
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'flex-start',
-          justifyContent: 'space-between',
-          gap: '12px',
-        }}
-      >
+        gap: '12px'
+      }}>
         <div>
-          <div
-            style={{
-              fontSize: '12px',
-              fontWeight: 600,
-              color: '#64748b',
-              marginBottom: '8px',
-            }}
-          >
+          <div style={{
+            fontSize: '12px',
+            fontWeight: 600,
+            color: '#64748b',
+            marginBottom: '8px'
+          }}>
             {label}
           </div>
 
-          <div
-            style={{
-              fontSize: '27px',
-              lineHeight: 1,
-              fontWeight: 750,
-              color: '#0f172a',
-              letterSpacing: '-0.5px',
-            }}
-          >
+          <div style={{
+            fontSize: '27px',
+            fontWeight: 750,
+            color: '#0f172a'
+          }}>
             {Number.isFinite(value) ? value : 0}
-            <span
-              style={{
-                fontSize: '13px',
-                fontWeight: 500,
-                color: '#94a3b8',
-                marginLeft: '4px',
-              }}
-            >
+            <span style={{
+              fontSize: '13px',
+              fontWeight: 500,
+              color: '#94a3b8',
+              marginLeft: '4px'
+            }}>
               {unit}
             </span>
           </div>
         </div>
 
-        <div
-          style={{
-            width: '44px',
-            height: '44px',
-            borderRadius: '13px',
-            backgroundColor: iconBg,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexShrink: 0,
-          }}
-        >
-          <Icon
-            style={{
-              width: '21px',
-              height: '21px',
-              color: iconColor,
-            }}
-          />
+        <div style={{
+          width: '44px',
+          height: '44px',
+          borderRadius: '13px',
+          background: iconBg,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexShrink: 0
+        }}>
+          <Icon size={21} color={iconColor} />
         </div>
       </div>
 
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '6px',
-          marginTop: '14px',
-        }}
-      >
-        <span
-          style={{
-            width: '7px',
-            height: '7px',
-            borderRadius: '50%',
-            backgroundColor: statusColor,
-            display: 'inline-block',
-          }}
-        />
-
-        <span
-          style={{
-            fontSize: '11px',
-            fontWeight: 600,
-            color: statusColor,
-          }}
-        >
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '6px',
+        marginTop: '14px'
+      }}>
+        <span style={{
+          width: '7px',
+          height: '7px',
+          borderRadius: '50%',
+          background: statusColor
+        }} />
+        <span style={{
+          fontSize: '11px',
+          fontWeight: 600,
+          color: statusColor
+        }}>
           {status}
         </span>
       </div>
@@ -193,387 +149,370 @@ function StatCard({
   );
 }
 
-/* =========================================================
-   Alert Item
-========================================================= */
-
-function AlertPill({
-  type,
-  message,
-}: {
-  type: AlertType;
-  message: string;
-}) {
+function AlertPill({ type, message }: AlertItem) {
   const colors = {
     high: {
       bg: '#fef2f2',
       border: '#fecaca',
-      text: '#dc2626',
-      icon: '#ef4444',
+      text: '#dc2626'
     },
     medium: {
       bg: '#fffbeb',
       border: '#fde68a',
-      text: '#b45309',
-      icon: '#f59e0b',
+      text: '#b45309'
     },
     normal: {
       bg: '#f0fdf4',
       border: '#bbf7d0',
-      text: '#15803d',
-      icon: '#22c55e',
-    },
+      text: '#15803d'
+    }
   };
 
   const c = colors[type];
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '10px',
-        padding: '11px 13px',
-        borderRadius: '11px',
-        backgroundColor: c.bg,
-        border: `1px solid ${c.border}`,
-      }}
-    >
-      <AlertTriangle
-        style={{
-          width: '15px',
-          height: '15px',
-          color: c.icon,
-          flexShrink: 0,
-        }}
-      />
-
-      <span
-        style={{
-          fontSize: '12px',
-          fontWeight: 500,
-          color: c.text,
-        }}
-      >
+    <div style={{
+      display: 'flex',
+      alignItems: 'center',
+      gap: '10px',
+      padding: '11px 13px',
+      borderRadius: '11px',
+      background: c.bg,
+      border: `1px solid ${c.border}`
+    }}>
+      <AlertTriangle size={16} color={c.text} />
+      <span style={{
+        fontSize: '12px',
+        fontWeight: 500,
+        color: c.text
+      }}>
         {message}
       </span>
     </div>
   );
 }
 
-/* =========================================================
-   Health Score
-========================================================= */
-
 function HealthScoreCard({
-  score,
-  alertsCount,
+  score, alertsCount
 }: {
   score: number;
   alertsCount: number;
 }) {
-  const scoreColor =
-    score >= 80 ? '#16a34a' : score >= 60 ? '#f59e0b' : '#ef4444';
+  const color =
+    score >= 80 ? '#16a34a' :
+      score >= 60 ? '#f59e0b' : '#ef4444';
 
-  const scoreLabel =
-    score >= 80 ? 'Healthy Field' : score >= 60 ? 'Needs Attention' : 'Critical';
+  const label =
+    score >= 80 ? 'Healthy Field' :
+      score >= 60 ? 'Needs Attention' : 'Critical';
 
   return (
-    <div
-      style={{
-        background: '#ffffff',
-        borderRadius: '18px',
-        border: '1px solid #e5e7eb',
-        boxShadow: '0 3px 12px rgba(15,23,42,0.05)',
-        padding: '22px',
-        height: '100%',
-      }}
-    >
-      <div
-        style={{
+    <div style={{ ...cardStyle, height: '100%' }}>
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: '20px'
+      }}>
+        <div style={{
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'space-between',
-          marginBottom: '18px',
-        }}
-      >
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px',
-          }}
-        >
-          <div
-            style={{
-              width: '38px',
-              height: '38px',
-              borderRadius: '11px',
-              background: '#f0fdf4',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <Leaf
-              style={{
-                width: '20px',
-                height: '20px',
-                color: '#16a34a',
-              }}
-            />
+          gap: '10px'
+        }}>
+          <div style={{
+            padding: '10px',
+            background: '#f0fdf4',
+            borderRadius: '11px'
+          }}>
+            <Leaf size={20} color="#16a34a" />
           </div>
-
           <div>
-            <div
-              style={{
-                fontSize: '14px',
-                fontWeight: 700,
-                color: '#0f172a',
-              }}
-            >
-              Field Health
-            </div>
-
-            <div
-              style={{
-                fontSize: '11px',
-                color: '#94a3b8',
-                marginTop: '2px',
-              }}
-            >
+            <div style={titleStyle}>Field Health</div>
+            <div style={{ fontSize: '11px', color: '#94a3b8' }}>
               Based on live sensor readings
             </div>
           </div>
         </div>
-
-        <ShieldCheck
-          style={{
-            width: '20px',
-            height: '20px',
-            color: scoreColor,
-          }}
-        />
+        <ShieldCheck size={20} color={color} />
       </div>
 
-      <div
-        style={{
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '22px',
+        flexWrap: 'wrap'
+      }}>
+        <div style={{
+          width: '94px',
+          height: '94px',
+          borderRadius: '50%',
+          background: `conic-gradient(${color} ${score * 3.6}deg, #e5e7eb 0deg)`,
           display: 'flex',
           alignItems: 'center',
-          gap: '22px',
-        }}
-      >
-        <div
-          style={{
-            width: '94px',
-            height: '94px',
+          justifyContent: 'center',
+          flexShrink: 0
+        }}>
+          <div style={{
+            width: '76px',
+            height: '76px',
             borderRadius: '50%',
-            background: `conic-gradient(${scoreColor} ${score * 3.6}deg, #e5e7eb 0deg)`,
+            background: '#fff',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            flexShrink: 0,
-          }}
-        >
-          <div
-            style={{
-              width: '76px',
-              height: '76px',
-              borderRadius: '50%',
-              background: '#ffffff',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <span
-              style={{
-                fontSize: '24px',
-                fontWeight: 800,
-                color: '#0f172a',
-              }}
-            >
-              {score}%
-            </span>
+            fontSize: '24px',
+            fontWeight: 800,
+            color: '#0f172a'
+          }}>
+            {score}%
           </div>
         </div>
 
-        <div>
-          <div
-            style={{
-              fontSize: '17px',
-              fontWeight: 750,
-              color: scoreColor,
-              marginBottom: '5px',
-            }}
-          >
-            {scoreLabel}
+        <div style={{ flex: 1, minWidth: '120px' }}>
+          <div style={{
+            fontSize: '17px',
+            fontWeight: 750,
+            color
+          }}>
+            {label}
           </div>
-
-          <div
-            style={{
-              fontSize: '12px',
-              color: '#64748b',
-              lineHeight: 1.6,
-            }}
-          >
+          <p style={{
+            fontSize: '12px',
+            color: '#64748b',
+            lineHeight: 1.6
+          }}>
             {alertsCount === 0
               ? 'All monitored conditions are within the expected range.'
-              : `${alertsCount} active condition${alertsCount > 1 ? 's' : ''
-              } require attention.`}
-          </div>
+              : `${alertsCount} active conditions require attention.`}
+          </p>
         </div>
       </div>
     </div>
   );
 }
 
-/* =========================================================
-   IoT Device Status
-========================================================= */
-
-function DeviceStatusCard() {
-  const devices = [
-    { name: 'ESP32 Controller', status: 'Online' },
-    { name: 'Temperature Sensor', status: 'Online' },
-    { name: 'Humidity Sensor', status: 'Online' },
-    { name: 'Soil Moisture Sensor', status: 'Online' },
+function DeviceStatusCard({
+  esp32Status,
+  sensorFields
+}: {
+  esp32Status: DeviceState;
+  sensorFields: Record<string, boolean>;
+}) {
+  const devices: { name: string; status: DeviceState }[] = [
+    { name: 'ESP32 Controller', status: esp32Status },
+    {
+      name: 'Temperature Sensor',
+      status: esp32Status === 'Online'
+        ? sensorFields.temp ? 'Online' : 'Unknown'
+        : esp32Status
+    },
+    {
+      name: 'Humidity Sensor',
+      status: esp32Status === 'Online'
+        ? sensorFields.humidity ? 'Online' : 'Unknown'
+        : esp32Status
+    },
+    {
+      name: 'Soil Moisture Sensor',
+      status: esp32Status === 'Online'
+        ? sensorFields.moisture ? 'Online' : 'Unknown'
+        : esp32Status
+    }
   ];
 
   return (
-    <div
-      style={{
-        background: '#ffffff',
-        border: '1px solid #e5e7eb',
-        borderRadius: '18px',
-        padding: '22px',
-        boxShadow: '0 3px 12px rgba(15,23,42,0.05)',
-      }}
-    >
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '10px',
-          marginBottom: '18px',
-        }}
-      >
-        <div
-          style={{
-            width: '38px',
-            height: '38px',
-            borderRadius: '11px',
-            background: '#eff6ff',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <Wifi
-            style={{
-              width: '19px',
-              height: '19px',
-              color: '#2563eb',
-            }}
-          />
+    <div style={cardStyle}>
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '10px',
+        marginBottom: '18px'
+      }}>
+        <div style={{
+          padding: '10px',
+          background: '#eff6ff',
+          borderRadius: '11px'
+        }}>
+          <Wifi size={20} color="#2563eb" />
         </div>
-
         <div>
-          <div
-            style={{
-              fontSize: '14px',
-              fontWeight: 700,
-              color: '#0f172a',
-            }}
-          >
-            IoT Device Status
-          </div>
-
-          <div
-            style={{
-              fontSize: '11px',
-              color: '#94a3b8',
-            }}
-          >
-            Connected field devices
+          <div style={titleStyle}>IoT Device Status</div>
+          <div style={{ fontSize: '11px', color: '#94a3b8' }}>
+            Live device connectivity
           </div>
         </div>
       </div>
 
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '11px',
-        }}
-      >
-        {devices.map((device) => (
-          <div
-            key={device.name}
-            style={{
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '11px'
+      }}>
+        {devices.map(device => {
+          const color =
+            device.status === 'Online' ? '#15803d' :
+              device.status === 'Offline' ? '#dc2626' : '#b45309';
+
+          return (
+            <div key={device.name} style={{
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              padding: '9px 10px',
-              borderRadius: '9px',
+              gap: '8px',
+              padding: '10px',
               background: '#f8fafc',
-            }}
-          >
-            <div
-              style={{
+              borderRadius: '9px'
+            }}>
+              <div style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: '8px',
-              }}
-            >
-              <Activity
-                style={{
-                  width: '14px',
-                  height: '14px',
-                  color: '#16a34a',
-                }}
-              />
-
-              <span
-                style={{
+                minWidth: 0
+              }}>
+                <Activity size={14} color={color} />
+                <span style={{
                   fontSize: '11px',
-                  color: '#475569',
-                  fontWeight: 500,
-                }}
-              >
-                {device.name}
-              </span>
-            </div>
+                  color: '#475569'
+                }}>
+                  {device.name}
+                </span>
+              </div>
 
-            <span
-              style={{
+              <span style={{
                 fontSize: '10px',
                 fontWeight: 700,
-                color: '#15803d',
-                background: '#dcfce7',
-                padding: '4px 7px',
+                color,
+                background:
+                  device.status === 'Online' ? '#dcfce7' :
+                    device.status === 'Offline' ? '#fee2e2' : '#fef3c7',
+                padding: '4px 8px',
                 borderRadius: '999px',
+                flexShrink: 0
+              }}>
+                ● {device.status}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      <p style={{
+        fontSize: '10px',
+        color: '#94a3b8',
+        marginTop: '12px'
+      }}>
+        Sensor status is inferred from fresh readings.
+        Hardware diagnostics are required to detect individual sensor failures.
+      </p>
+    </div>
+  );
+}
+
+function TrendChart({
+  title,
+  icon: Icon,
+  iconColor,
+  history,
+  lines
+}: {
+  title: string;
+  icon: React.ElementType;
+  iconColor: string;
+  history: HistoryItem[];
+  lines: {
+    key: string;
+    name: string;
+    color: string;
+  }[];
+}) {
+  return (
+    <div style={cardStyle}>
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: '8px',
+        marginBottom: '15px'
+      }}>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px'
+        }}>
+          <Icon size={16} color={iconColor} />
+          <span style={{ ...titleStyle, fontSize: '13px' }}>
+            {title}
+          </span>
+        </div>
+
+        <span style={{
+          fontSize: '9px',
+          fontWeight: 700,
+          color: '#16a34a',
+          background: '#f0fdf4',
+          padding: '4px 7px',
+          borderRadius: '999px'
+        }}>
+          LIVE
+        </span>
+      </div>
+
+      <div style={{ width: '100%', minWidth: 0, height: 240 }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart
+            data={history}
+            margin={{ top: 5, right: 8, left: -20, bottom: 5 }}
+          >
+            <CartesianGrid
+              strokeDasharray="3 3"
+              stroke="#eef2f7"
+            />
+            <XAxis
+              dataKey="time"
+              tick={{ fontSize: 9, fill: '#94a3b8' }}
+              axisLine={false}
+              tickLine={false}
+            />
+            <YAxis
+              tick={{ fontSize: 9, fill: '#94a3b8' }}
+              axisLine={false}
+              tickLine={false}
+            />
+            <Tooltip
+              contentStyle={{
+                borderRadius: '10px',
+                border: '1px solid #dcfce7',
+                fontSize: '11px'
               }}
-            >
-              ● {device.status}
-            </span>
-          </div>
-        ))}
+            />
+            <Legend wrapperStyle={{ fontSize: '10px' }} />
+
+            {lines.map(line => (
+              <Line
+                key={line.key}
+                type="monotone"
+                dataKey={line.key}
+                name={line.name}
+                stroke={line.color}
+                strokeWidth={2.5}
+                dot={false}
+                activeDot={{ r: 4 }}
+              />
+            ))}
+          </LineChart>
+        </ResponsiveContainer>
       </div>
     </div>
   );
 }
 
-/* =========================================================
-   Main Dashboard
-========================================================= */
-
 export function Dashboard() {
   const user = auth.currentUser;
-
   const displayName =
     user?.displayName || user?.email?.split('@')[0] || 'Farmer';
+
+  const [greeting, setGreeting] = useState(getGreeting);
+  const [now, setNow] = useState(Date.now());
 
   const [data, setData] = useState<SensorData>({
     temp: 0,
@@ -581,26 +520,54 @@ export function Dashboard() {
     moisture: 0,
     waterLevel: 0,
     lat: 0,
-    lng: 0,
+    lng: 0
   });
 
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
-
   const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [lastUpdated, setLastUpdated] = useState('');
+  const [lastSeen, setLastSeen] = useState<number | null>(null);
+  const [firebaseConnected, setFirebaseConnected] = useState(false);
+  const [hasData, setHasData] = useState(false);
 
-  const [lastUpdated, setLastUpdated] = useState<string>('');
+  const [sensorFields, setSensorFields] = useState({
+    temp: false,
+    humidity: false,
+    moisture: false
+  });
 
-  /* =========================================================
-     Firebase Real-Time Data
-  ========================================================= */
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setGreeting(getGreeting());
+      setNow(Date.now());
+    }, 10000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const connectionRef = ref(db, '.info/connected');
+
+    const unsubscribe = onValue(connectionRef, snapshot => {
+      setFirebaseConnected(snapshot.val() === true);
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     const dataRef = ref(db, 'field');
 
-    const unsubscribe = onValue(dataRef, (snapshot) => {
+    const unsubscribe = onValue(dataRef, snapshot => {
       const value = snapshot.val();
 
-      if (!value) return;
+      if (!value) {
+        setHasData(false);
+        setLastSeen(null);
+        return;
+      }
+
+      setHasData(true);
 
       const sensorData: SensorData = {
         temp: Number(value.temp) || 0,
@@ -608,33 +575,33 @@ export function Dashboard() {
         moisture: Number(value.moisture) || 0,
         waterLevel: Number(value.waterLevel) || 0,
         lat: Number(value.lat) || 0,
-        lng: Number(value.lng) || 0,
+        lng: Number(value.lng) || 0
       };
 
       setData(sensorData);
 
-      const time = new Date().toLocaleTimeString([], {
-        hour: '2-digit',
-        minute: '2-digit',
+      setSensorFields({
+        temp: value.temp !== undefined && value.temp !== null &&
+          Number.isFinite(Number(value.temp)),
+        humidity: value.humidity !== undefined && value.humidity !== null &&
+          Number.isFinite(Number(value.humidity)),
+        moisture: value.moisture !== undefined && value.moisture !== null &&
+          Number.isFinite(Number(value.moisture))
       });
 
-      setLastUpdated(
-        new Date().toLocaleTimeString([], {
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
-        })
-      );
+      const stamp = Number(value.lastSeen);
+      setLastSeen(Number.isFinite(stamp) && stamp > 0 ? stamp : null);
 
-      setHistory((prev) => [
+      const time = new Date().toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+
+      setLastUpdated(new Date().toLocaleTimeString());
+
+      setHistory(prev => [
         ...prev.slice(-14),
-        {
-          time,
-          temp: sensorData.temp,
-          moisture: sensorData.moisture,
-          waterLevel: sensorData.waterLevel,
-          humidity: sensorData.humidity,
-        },
+        { time, ...sensorData }
       ]);
 
       const newAlerts: AlertItem[] = [];
@@ -642,33 +609,33 @@ export function Dashboard() {
       if (sensorData.temp > 35) {
         newAlerts.push({
           type: 'high',
-          message: `High Temperature: ${sensorData.temp}°C`,
+          message: `High Temperature: ${sensorData.temp}°C`
         });
       }
 
       if (sensorData.moisture < 30) {
         newAlerts.push({
           type: 'high',
-          message: `Low Soil Moisture: ${sensorData.moisture}%`,
+          message: `Low Soil Moisture: ${sensorData.moisture}%`
         });
       }
 
       if (sensorData.humidity < 40) {
         newAlerts.push({
           type: 'medium',
-          message: `Low Humidity: ${sensorData.humidity}%`,
+          message: `Low Humidity: ${sensorData.humidity}%`
         });
       }
 
       if (sensorData.waterLevel < 5) {
         newAlerts.push({
           type: 'high',
-          message: `Water Level Too Low: ${sensorData.waterLevel} cm`,
+          message: `Water Level Too Low: ${sensorData.waterLevel} cm`
         });
       } else if (sensorData.waterLevel > 20) {
         newAlerts.push({
           type: 'high',
-          message: `Water Level Too High: ${sensorData.waterLevel} cm`,
+          message: `Water Level Too High: ${sensorData.waterLevel} cm`
         });
       }
 
@@ -678,24 +645,23 @@ export function Dashboard() {
     return () => unsubscribe();
   }, []);
 
-  /* =========================================================
-     Sensor Status
-  ========================================================= */
-
-  const moistureOk = data.moisture > 60;
-
-  const waterOk =
-    data.waterLevel >= 5 && data.waterLevel <= 20;
+  const esp32Status: DeviceState = !firebaseConnected
+    ? 'Unknown'
+    : lastSeen === null
+      ? 'Unknown'
+      : now - lastSeen >= 0 &&
+        now - lastSeen <= HEARTBEAT_TIMEOUT_MS
+        ? 'Online'
+        : 'Offline';
 
   const temperatureOk = data.temp <= 35;
-
   const humidityOk = data.humidity >= 40;
-
-  /* =========================================================
-     Field Health Score
-  ========================================================= */
+  const moistureOk = data.moisture > 60;
+  const waterOk = data.waterLevel >= 5 && data.waterLevel <= 20;
 
   const healthScore = useMemo(() => {
+    if (!hasData) return 0;
+
     let score = 100;
 
     if (!temperatureOk) score -= 20;
@@ -707,319 +673,221 @@ export function Dashboard() {
 
     return Math.max(0, Math.min(100, score));
   }, [
-    temperatureOk,
-    humidityOk,
-    moistureOk,
-    waterOk,
-    alerts.length,
+    hasData, temperatureOk, humidityOk,
+    moistureOk, waterOk, alerts.length
   ]);
 
-  /* =========================================================
-     Date
-  ========================================================= */
-
-  const today = new Date().toLocaleDateString('en-GB', {
+  const today = new Date(now).toLocaleDateString('en-GB', {
     weekday: 'long',
     day: '2-digit',
     month: 'short',
-    year: 'numeric',
+    year: 'numeric'
   });
 
-  /* =========================================================
-     UI
-  ========================================================= */
+  const systemStatus =
+    !firebaseConnected ? 'Disconnected' :
+      esp32Status === 'Online' ? 'Live & Online' :
+        esp32Status === 'Offline' ? 'Device Offline' :
+          'Checking Device';
 
   return (
-    <div
-      className="agro-dashboard-original"
-      style={{
-        width: '100%',
-        minWidth: 0,
-        maxWidth: '1400px',
-        margin: '0 auto',
-        padding: '26px',
-        boxSizing: 'border-box',
-      }}
-    >
+    <div className="agro-dashboard">
       <style>{`
-        .agro-dashboard-original, .agro-dashboard-original * { box-sizing: border-box; }
-        .agro-dashboard-original .agro-grid-child { min-width: 0; }
-        @media (max-width: 900px) {
-          .agro-dashboard-original .agro-alerts-location {
-            grid-template-columns: minmax(0, 1fr) !important;
+        .agro-dashboard {
+          width: 100%;
+          max-width: 1400px;
+          margin: 0 auto;
+          padding: 26px;
+          box-sizing: border-box;
+        }
+        .agro-stats {
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 14px;
+          margin-bottom: 20px;
+        }
+        .agro-health-devices {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 16px;
+          margin-bottom: 20px;
+        }
+        .agro-alerts-gps {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) minmax(260px, .42fr);
+          gap: 16px;
+          margin-bottom: 20px;
+        }
+        .agro-charts {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 16px;
+          margin-bottom: 20px;
+        }
+        @media (max-width: 1150px) {
+          .agro-stats {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+          .agro-alerts-gps {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+          .agro-charts {
+            grid-template-columns: minmax(0, 1fr);
           }
         }
         @media (max-width: 700px) {
-          .agro-dashboard-original { padding: 14px !important; }
-          .agro-dashboard-original .agro-welcome { padding: 20px 17px !important; border-radius: 17px !important; }
-          .agro-dashboard-original .agro-welcome h1 { font-size: 21px !important; }
-          .agro-dashboard-original .agro-sensor-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 10px !important; }
-          .agro-dashboard-original .agro-health-devices,
-          .agro-dashboard-original .agro-alerts-location,
-          .agro-dashboard-original .agro-chart-grid { grid-template-columns: minmax(0, 1fr) !important; }
-          .agro-dashboard-original .agro-chart-grid > div,
-          .agro-dashboard-original .agro-health-devices > div,
-          .agro-dashboard-original .agro-alerts-location > div { min-width: 0; }
-          .agro-dashboard-original .agro-chart-grid .recharts-responsive-container { min-width: 0; }
-        }
-        @media (max-width: 390px) {
-          .agro-dashboard-original .agro-sensor-grid { grid-template-columns: minmax(0, 1fr) !important; }
-          .agro-dashboard-original .agro-welcome h1 { font-size: 19px !important; }
+          .agro-dashboard { padding: 14px; }
+          .agro-stats,
+          .agro-health-devices,
+          .agro-alerts-gps,
+          .agro-charts {
+            grid-template-columns: minmax(0, 1fr);
+          }
+          .agro-welcome { padding: 20px !important; }
+          .agro-welcome h1 { font-size: 21px !important; }
         }
       `}</style>
-      {/* =====================================================
-          Header
-      ===================================================== */}
 
-      <div
-        className="agro-welcome"
-        style={{
-          background:
-            'linear-gradient(135deg, #064e3b 0%, #065f46 50%, #16a34a 100%)',
-          borderRadius: '22px',
-          padding: '26px 28px',
-          color: '#ffffff',
-          boxShadow: '0 8px 25px rgba(6,78,59,0.18)',
-          marginBottom: '22px',
+      {/* Welcome Banner */}
+      <div className="agro-welcome" style={{
+        background:
+          'linear-gradient(135deg, #064e3b 0%, #065f46 50%, #16a34a 100%)',
+        borderRadius: '22px',
+        padding: '26px 28px',
+        color: '#ffffff',
+        boxShadow: '0 8px 25px rgba(6,78,59,0.18)',
+        marginBottom: '22px',
+        position: 'relative',
+        overflow: 'hidden'
+      }}>
+        <div style={{
+          position: 'absolute',
+          width: '190px',
+          height: '190px',
+          borderRadius: '50%',
+          background: 'rgba(255,255,255,0.06)',
+          right: '-55px',
+          top: '-75px'
+        }} />
+
+        <div style={{
           position: 'relative',
-          overflow: 'hidden',
-        }}
-      >
-        <div
-          style={{
-            position: 'absolute',
-            width: '190px',
-            height: '190px',
-            borderRadius: '50%',
-            background: 'rgba(255,255,255,0.06)',
-            right: '-55px',
-            top: '-75px',
-          }}
-        />
-
-        <div
-          style={{
-            position: 'absolute',
-            width: '120px',
-            height: '120px',
-            borderRadius: '50%',
-            background: 'rgba(255,255,255,0.05)',
-            right: '100px',
-            bottom: '-75px',
-          }}
-        />
-
-        <div
-          style={{
-            position: 'relative',
-            zIndex: 1,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '20px',
-            flexWrap: 'wrap',
-          }}
-        >
+          zIndex: 1,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '20px',
+          flexWrap: 'wrap'
+        }}>
           <div>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                marginBottom: '8px',
-              }}
-            >
-              <Sprout
-                style={{
-                  width: '17px',
-                  height: '17px',
-                  color: '#bbf7d0',
-                }}
-              />
-
-              <span
-                style={{
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  color: '#bbf7d0',
-                }}
-              >
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              marginBottom: '8px'
+            }}>
+              <Sprout size={17} color="#bbf7d0" />
+              <span style={{
+                fontSize: '12px',
+                fontWeight: 600,
+                color: '#bbf7d0'
+              }}>
                 AGROEYE SMART FARMING
               </span>
             </div>
 
-            <h1
-              style={{
-                margin: 0,
-                fontSize: '25px',
-                fontWeight: 800,
-                letterSpacing: '-0.5px',
-              }}
-            >
-              Good Morning, {displayName} 👋
+            <h1 style={{
+              margin: 0,
+              fontSize: '25px',
+              fontWeight: 800
+            }}>
+              {greeting}, {displayName} 👋
             </h1>
 
-            <p
-              style={{
-                margin: '7px 0 0',
-                color: '#d1fae5',
-                fontSize: '13px',
-              }}
-            >
+            <p style={{
+              margin: '7px 0 0',
+              color: '#d1fae5',
+              fontSize: '13px'
+            }}>
               Monitor your paddy field and make better farming decisions.
             </p>
           </div>
 
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px',
-              flexWrap: 'wrap',
-            }}
-          >
-            <div
-              style={{
-                background: 'rgba(255,255,255,0.11)',
-                border: '1px solid rgba(255,255,255,0.12)',
-                borderRadius: '12px',
-                padding: '10px 14px',
-                minWidth: '110px',
-              }}
-            >
-              <div
-                style={{
-                  fontSize: '9px',
-                  color: '#a7f3d0',
-                  marginBottom: '3px',
-                }}
-              >
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            flexWrap: 'wrap'
+          }}>
+            <div style={{
+              background: 'rgba(255,255,255,0.11)',
+              borderRadius: '12px',
+              padding: '10px 14px'
+            }}>
+              <div style={{ fontSize: '9px', color: '#a7f3d0' }}>
                 TODAY
               </div>
-
-              <div
-                style={{
-                  fontSize: '12px',
-                  fontWeight: 700,
-                }}
-              >
+              <div style={{ fontSize: '12px', fontWeight: 700 }}>
                 {today}
               </div>
             </div>
 
-            <div
-              style={{
-                background: 'rgba(255,255,255,0.11)',
-                border: '1px solid rgba(255,255,255,0.12)',
-                borderRadius: '12px',
-                padding: '10px 14px',
-                minWidth: '105px',
-              }}
-            >
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '5px',
-                  fontSize: '9px',
-                  color: '#a7f3d0',
-                  marginBottom: '3px',
-                }}
-              >
-                <span
-                  style={{
-                    width: '6px',
-                    height: '6px',
-                    borderRadius: '50%',
-                    background: '#4ade80',
-                  }}
-                />
+            <div style={{
+              background: 'rgba(255,255,255,0.11)',
+              borderRadius: '12px',
+              padding: '10px 14px'
+            }}>
+              <div style={{ fontSize: '9px', color: '#a7f3d0' }}>
                 SYSTEM
               </div>
-
-              <div
-                style={{
-                  fontSize: '12px',
-                  fontWeight: 700,
-                }}
-              >
-                Live & Online
+              <div style={{ fontSize: '12px', fontWeight: 700 }}>
+                ● {systemStatus}
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* =====================================================
-          Section title
-      ===================================================== */}
-
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          marginBottom: '12px',
-          gap: '10px',
-        }}
-      >
+      {/* Live Monitoring */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: '10px',
+        flexWrap: 'wrap',
+        marginBottom: '12px'
+      }}>
         <div>
-          <h2
-            style={{
-              margin: 0,
-              fontSize: '17px',
-              fontWeight: 750,
-              color: '#0f172a',
-            }}
-          >
+          <h2 style={{
+            margin: 0,
+            fontSize: '17px',
+            fontWeight: 750,
+            color: '#0f172a'
+          }}>
             Live Field Monitoring
           </h2>
-
-          <p
-            style={{
-              margin: '3px 0 0',
-              fontSize: '11px',
-              color: '#94a3b8',
-            }}
-          >
+          <p style={{
+            margin: '3px 0 0',
+            fontSize: '11px',
+            color: '#94a3b8'
+          }}>
             Real-time environmental conditions
           </p>
         </div>
 
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            color: '#64748b',
-            fontSize: '10px',
-          }}
-        >
-          <Clock3
-            style={{
-              width: '13px',
-              height: '13px',
-            }}
-          />
-
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px',
+          color: '#64748b',
+          fontSize: '10px'
+        }}>
+          <Clock3 size={13} />
           Updated {lastUpdated || 'waiting...'}
         </div>
       </div>
 
-      {/* =====================================================
-          Sensor Cards
-      ===================================================== */}
-
-      <div
-        className="agro-sensor-grid"
-        style={{
-          display: 'grid',
-          gridTemplateColumns:
-            'repeat(auto-fit, minmax(205px, 1fr))',
-          gap: '14px',
-          marginBottom: '20px',
-        }}
-      >
+      <div className="agro-stats">
         <StatCard
           label="Temperature"
           value={data.temp}
@@ -1030,7 +898,6 @@ export function Dashboard() {
           status={temperatureOk ? 'Normal range' : 'Too High'}
           statusColor={temperatureOk ? '#16a34a' : '#dc2626'}
         />
-
         <StatCard
           label="Humidity"
           value={data.humidity}
@@ -1041,7 +908,6 @@ export function Dashboard() {
           status={humidityOk ? 'Good level' : 'Too Low'}
           statusColor={humidityOk ? '#16a34a' : '#dc2626'}
         />
-
         <StatCard
           label="Soil Moisture"
           value={data.moisture}
@@ -1052,7 +918,6 @@ export function Dashboard() {
           status={moistureOk ? 'Healthy' : 'Needs Water'}
           statusColor={moistureOk ? '#16a34a' : '#dc2626'}
         />
-
         <StatCard
           label="Water Level"
           value={data.waterLevel}
@@ -1061,833 +926,309 @@ export function Dashboard() {
           iconColor={waterOk ? '#0891b2' : '#dc2626'}
           iconBg={waterOk ? '#ecfeff' : '#fef2f2'}
           status={
-            data.waterLevel < 5
-              ? 'Too Low'
-              : data.waterLevel > 20
-                ? 'Too High'
-                : 'Optimal'
+            data.waterLevel < 5 ? 'Too Low' :
+              data.waterLevel > 20 ? 'Too High' : 'Optimal'
           }
           statusColor={waterOk ? '#0891b2' : '#dc2626'}
         />
       </div>
 
-      {/* =====================================================
-          Health + Device Status
-      ===================================================== */}
-
-      <div
-        className="agro-health-devices"
-        style={{
-          display: 'grid',
-          gridTemplateColumns:
-            'repeat(auto-fit, minmax(320px, 1fr))',
-          gap: '16px',
-          marginBottom: '20px',
-        }}
-      >
+      {/* Field Health and Devices */}
+      <div className="agro-health-devices">
         <HealthScoreCard
           score={healthScore}
           alertsCount={alerts.length}
         />
-
-        <DeviceStatusCard />
+        <DeviceStatusCard
+          esp32Status={esp32Status}
+          sensorFields={sensorFields}
+        />
       </div>
 
-      {/* =====================================================
-          Alerts + GPS
-      ===================================================== */}
-
-      <div
-        className="agro-alerts-location"
-        style={{
-          display: 'grid',
-          gridTemplateColumns:
-            'minmax(0, 1fr) minmax(260px, 0.42fr)',
-          gap: '16px',
-          marginBottom: '20px',
-        }}
-      >
-        {/* Alerts */}
-
-        <div
-          style={{
-            background: '#ffffff',
-            border: '1px solid #e5e7eb',
-            borderRadius: '18px',
-            padding: '22px',
-            boxShadow: '0 3px 12px rgba(15,23,42,0.05)',
-          }}
-        >
-          <div
-            style={{
+      {/* Alerts and GPS */}
+      <div className="agro-alerts-gps">
+        <div style={cardStyle}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: '16px'
+          }}>
+            <div style={{
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'space-between',
-              marginBottom: '16px',
-            }}
-          >
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
-              }}
-            >
-              <div
-                style={{
-                  width: '38px',
-                  height: '38px',
-                  borderRadius: '11px',
-                  background: '#fef2f2',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <AlertTriangle
-                  style={{
-                    width: '19px',
-                    height: '19px',
-                    color: '#ef4444',
-                  }}
-                />
-              </div>
-
+              gap: '10px'
+            }}>
+              <AlertTriangle size={20} color="#ef4444" />
               <div>
-                <div
-                  style={{
-                    fontSize: '14px',
-                    fontWeight: 700,
-                    color: '#0f172a',
-                  }}
-                >
-                  Live Alerts
-                </div>
-
-                <div
-                  style={{
-                    fontSize: '11px',
-                    color: '#94a3b8',
-                    marginTop: '2px',
-                  }}
-                >
+                <div style={titleStyle}>Live Alerts</div>
+                <div style={{
+                  fontSize: '11px',
+                  color: '#94a3b8'
+                }}>
                   Current field conditions
                 </div>
               </div>
             </div>
 
-            {alerts.length > 0 ? (
-              <span
-                style={{
-                  background: '#fee2e2',
-                  color: '#dc2626',
-                  fontSize: '10px',
-                  fontWeight: 700,
-                  padding: '5px 9px',
-                  borderRadius: '999px',
-                }}
-              >
-                {alerts.length} Active
-              </span>
-            ) : (
-              <span
-                style={{
-                  background: '#dcfce7',
-                  color: '#15803d',
-                  fontSize: '10px',
-                  fontWeight: 700,
-                  padding: '5px 9px',
-                  borderRadius: '999px',
-                }}
-              >
-                All Clear
-              </span>
-            )}
+            <span style={{
+              background: alerts.length ? '#fee2e2' : '#dcfce7',
+              color: alerts.length ? '#dc2626' : '#15803d',
+              fontSize: '10px',
+              fontWeight: 700,
+              padding: '5px 9px',
+              borderRadius: '999px'
+            }}>
+              {alerts.length ? `${alerts.length} Active` : 'All Clear'}
+            </span>
           </div>
 
-          {alerts.length === 0 ? (
-            <div
-              style={{
-                background: '#f0fdf4',
-                border: '1px solid #bbf7d0',
-                borderRadius: '12px',
-                padding: '15px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
-              }}
-            >
-              <CheckCircle2
-                style={{
-                  width: '19px',
-                  height: '19px',
-                  color: '#16a34a',
-                }}
-              />
-
+          {!hasData ? (
+            <p style={{ fontSize: '12px', color: '#64748b' }}>
+              Waiting for Firebase sensor readings...
+            </p>
+          ) : alerts.length === 0 ? (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              background: '#f0fdf4',
+              border: '1px solid #bbf7d0',
+              borderRadius: '12px',
+              padding: '15px'
+            }}>
+              <CheckCircle2 size={20} color="#16a34a" />
               <div>
-                <div
-                  style={{
-                    fontSize: '12px',
-                    fontWeight: 700,
-                    color: '#15803d',
-                  }}
-                >
+                <div style={{
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  color: '#15803d'
+                }}>
                   All systems normal
                 </div>
-
-                <div
-                  style={{
-                    fontSize: '10px',
-                    color: '#4ade80',
-                    marginTop: '2px',
-                  }}
-                >
+                <div style={{
+                  fontSize: '10px',
+                  color: '#4ade80'
+                }}>
                   No active environmental alerts.
                 </div>
               </div>
             </div>
           ) : (
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '8px',
-              }}
-            >
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '8px'
+            }}>
               {alerts.map((alert, index) => (
-                <AlertPill
-                  key={`${alert.message}-${index}`}
-                  {...alert}
-                />
+                <AlertPill key={index} {...alert} />
               ))}
             </div>
           )}
         </div>
 
-        {/* GPS */}
-
-        <div
-          style={{
-            background:
-              'linear-gradient(145deg, #ffffff 0%, #f0fdf4 100%)',
-            border: '1px solid #dcfce7',
-            borderRadius: '18px',
-            padding: '22px',
-            boxShadow: '0 3px 12px rgba(15,23,42,0.05)',
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px',
-              marginBottom: '17px',
-            }}
-          >
-            <div
-              style={{
-                width: '38px',
-                height: '38px',
-                borderRadius: '11px',
-                background: '#dcfce7',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <MapPin
-                style={{
-                  width: '19px',
-                  height: '19px',
-                  color: '#16a34a',
-                }}
-              />
-            </div>
-
+        <div style={{
+          ...cardStyle,
+          background:
+            'linear-gradient(145deg, #ffffff 0%, #f0fdf4 100%)',
+          border: '1px solid #dcfce7'
+        }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            marginBottom: '17px'
+          }}>
+            <MapPin size={20} color="#16a34a" />
             <div>
-              <div
-                style={{
-                  fontSize: '14px',
-                  fontWeight: 700,
-                  color: '#0f172a',
-                }}
-              >
-                Field Location
-              </div>
-
-              <div
-                style={{
-                  fontSize: '11px',
-                  color: '#64748b',
-                }}
-              >
+              <div style={titleStyle}>Field Location</div>
+              <div style={{
+                fontSize: '11px',
+                color: '#64748b'
+              }}>
                 GPS sensor coordinates
               </div>
             </div>
           </div>
 
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
-              gap: '10px',
-            }}
-          >
-            <div
-              style={{
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+            gap: '10px'
+          }}>
+            {[
+              { label: 'LATITUDE', value: data.lat },
+              { label: 'LONGITUDE', value: data.lng }
+            ].map(item => (
+              <div key={item.label} style={{
                 background: '#ffffff',
                 borderRadius: '10px',
                 padding: '11px',
                 border: '1px solid #dcfce7',
-              }}
-            >
-              <div
-                style={{
+                minWidth: 0
+              }}>
+                <div style={{
                   fontSize: '9px',
                   color: '#94a3b8',
-                  marginBottom: '4px',
-                }}
-              >
-                LATITUDE
-              </div>
-
-              <div
-                style={{
+                  marginBottom: '4px'
+                }}>
+                  {item.label}
+                </div>
+                <div style={{
                   fontSize: '12px',
                   fontWeight: 700,
                   color: '#166534',
-                  wordBreak: 'break-all',
-                }}
-              >
-                {data.lat || '—'}
+                  overflowWrap: 'anywhere'
+                }}>
+                  {item.value || '—'}
+                </div>
               </div>
-            </div>
-
-            <div
-              style={{
-                background: '#ffffff',
-                borderRadius: '10px',
-                padding: '11px',
-                border: '1px solid #dcfce7',
-              }}
-            >
-              <div
-                style={{
-                  fontSize: '9px',
-                  color: '#94a3b8',
-                  marginBottom: '4px',
-                }}
-              >
-                LONGITUDE
-              </div>
-
-              <div
-                style={{
-                  fontSize: '12px',
-                  fontWeight: 700,
-                  color: '#166534',
-                  wordBreak: 'break-all',
-                }}
-              >
-                {data.lng || '—'}
-              </div>
-            </div>
+            ))}
           </div>
 
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              marginTop: '13px',
-              fontSize: '10px',
-              color: '#15803d',
-              fontWeight: 600,
-            }}
-          >
-            <span
-              style={{
-                width: '6px',
-                height: '6px',
-                borderRadius: '50%',
-                background: '#22c55e',
-              }}
-            />
-            GPS data connected
+          <div style={{
+            marginTop: '13px',
+            fontSize: '10px',
+            color: '#15803d',
+            fontWeight: 600
+          }}>
+            {esp32Status === 'Online'
+              ? '● GPS readings available'
+              : '● GPS connectivity not verified'}
           </div>
         </div>
       </div>
 
-      {/* =====================================================
-          Charts Header
-      ===================================================== */}
-
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '9px',
-          marginBottom: '12px',
-        }}
-      >
-        <TrendingUp
-          style={{
-            width: '18px',
-            height: '18px',
-            color: '#16a34a',
-          }}
-        />
-
+      {/* Charts */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '9px',
+        marginBottom: '12px'
+      }}>
+        <TrendingUp size={18} color="#16a34a" />
         <div>
-          <div
-            style={{
-              fontSize: '17px',
-              fontWeight: 750,
-              color: '#0f172a',
-            }}
-          >
+          <div style={{
+            fontSize: '17px',
+            fontWeight: 750,
+            color: '#0f172a'
+          }}>
             Sensor Trends
           </div>
-
-          <div
-            style={{
-              fontSize: '11px',
-              color: '#94a3b8',
-              marginTop: '2px',
-            }}
-          >
+          <div style={{
+            fontSize: '11px',
+            color: '#94a3b8'
+          }}>
             Latest 15 real-time readings
           </div>
         </div>
       </div>
 
-      {/* =====================================================
-          Charts
-      ===================================================== */}
+      <div className="agro-charts">
+        <TrendChart
+          title="Temperature & Humidity"
+          icon={Thermometer}
+          iconColor="#ea580c"
+          history={history}
+          lines={[
+            {
+              key: 'temp',
+              name: 'Temperature °C',
+              color: '#f97316'
+            },
+            {
+              key: 'humidity',
+              name: 'Humidity %',
+              color: '#3b82f6'
+            }
+          ]}
+        />
 
-      <div
-        className="agro-chart-grid"
-        style={{
-          display: 'grid',
-          gridTemplateColumns:
-            'repeat(auto-fit, minmax(340px, 1fr))',
-          gap: '16px',
-          marginBottom: '20px',
-        }}
-      >
-        {/* Temperature / Humidity */}
-
-        <div
-          style={{
-            background: '#ffffff',
-            border: '1px solid #e5e7eb',
-            borderRadius: '18px',
-            padding: '20px',
-            boxShadow: '0 3px 12px rgba(15,23,42,0.05)',
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              marginBottom: '15px',
-            }}
-          >
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-              }}
-            >
-              <Thermometer
-                style={{
-                  width: '16px',
-                  height: '16px',
-                  color: '#ea580c',
-                }}
-              />
-
-              <span
-                style={{
-                  fontSize: '13px',
-                  fontWeight: 700,
-                  color: '#0f172a',
-                }}
-              >
-                Temperature & Humidity
-              </span>
-            </div>
-
-            <span
-              style={{
-                fontSize: '9px',
-                fontWeight: 700,
-                color: '#16a34a',
-                background: '#f0fdf4',
-                padding: '4px 7px',
-                borderRadius: '999px',
-              }}
-            >
-              LIVE
-            </span>
-          </div>
-
-          <ResponsiveContainer width="100%" height={220}>
-            <LineChart
-              data={history}
-              margin={{
-                top: 5,
-                right: 8,
-                left: -20,
-                bottom: 0,
-              }}
-            >
-              <CartesianGrid
-                strokeDasharray="3 3"
-                stroke="#eef2f7"
-              />
-
-              <XAxis
-                dataKey="time"
-                tick={{
-                  fontSize: 9,
-                  fill: '#94a3b8',
-                }}
-                axisLine={false}
-                tickLine={false}
-              />
-
-              <YAxis
-                tick={{
-                  fontSize: 9,
-                  fill: '#94a3b8',
-                }}
-                axisLine={false}
-                tickLine={false}
-              />
-
-              <Tooltip
-                contentStyle={{
-                  borderRadius: '10px',
-                  border: '1px solid #dcfce7',
-                  boxShadow:
-                    '0 5px 15px rgba(0,0,0,0.08)',
-                  fontSize: '11px',
-                }}
-              />
-
-              <Legend
-                wrapperStyle={{
-                  fontSize: '10px',
-                  paddingTop: '8px',
-                }}
-              />
-
-              <Line
-                type="monotone"
-                dataKey="temp"
-                name="Temperature °C"
-                stroke="#f97316"
-                strokeWidth={2.5}
-                dot={false}
-                activeDot={{ r: 4 }}
-              />
-
-              <Line
-                type="monotone"
-                dataKey="humidity"
-                name="Humidity %"
-                stroke="#3b82f6"
-                strokeWidth={2.5}
-                dot={false}
-                activeDot={{ r: 4 }}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-
-        {/* Soil / Water */}
-
-        <div
-          style={{
-            background: '#ffffff',
-            border: '1px solid #e5e7eb',
-            borderRadius: '18px',
-            padding: '20px',
-            boxShadow: '0 3px 12px rgba(15,23,42,0.05)',
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              marginBottom: '15px',
-            }}
-          >
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-              }}
-            >
-              <Droplets
-                style={{
-                  width: '16px',
-                  height: '16px',
-                  color: '#16a34a',
-                }}
-              />
-
-              <span
-                style={{
-                  fontSize: '13px',
-                  fontWeight: 700,
-                  color: '#0f172a',
-                }}
-              >
-                Soil & Water Monitoring
-              </span>
-            </div>
-
-            <span
-              style={{
-                fontSize: '9px',
-                fontWeight: 700,
-                color: '#0891b2',
-                background: '#ecfeff',
-                padding: '4px 7px',
-                borderRadius: '999px',
-              }}
-            >
-              LIVE
-            </span>
-          </div>
-
-          <ResponsiveContainer width="100%" height={220}>
-            <LineChart
-              data={history}
-              margin={{
-                top: 5,
-                right: 8,
-                left: -20,
-                bottom: 0,
-              }}
-            >
-              <CartesianGrid
-                strokeDasharray="3 3"
-                stroke="#eef2f7"
-              />
-
-              <XAxis
-                dataKey="time"
-                tick={{
-                  fontSize: 9,
-                  fill: '#94a3b8',
-                }}
-                axisLine={false}
-                tickLine={false}
-              />
-
-              <YAxis
-                tick={{
-                  fontSize: 9,
-                  fill: '#94a3b8',
-                }}
-                axisLine={false}
-                tickLine={false}
-              />
-
-              <Tooltip
-                contentStyle={{
-                  borderRadius: '10px',
-                  border: '1px solid #dcfce7',
-                  boxShadow:
-                    '0 5px 15px rgba(0,0,0,0.08)',
-                  fontSize: '11px',
-                }}
-              />
-
-              <Legend
-                wrapperStyle={{
-                  fontSize: '10px',
-                  paddingTop: '8px',
-                }}
-              />
-
-              <Line
-                type="monotone"
-                dataKey="moisture"
-                name="Soil Moisture %"
-                stroke="#16a34a"
-                strokeWidth={2.5}
-                dot={false}
-                activeDot={{ r: 4 }}
-              />
-
-              <Line
-                type="monotone"
-                dataKey="waterLevel"
-                name="Water Level cm"
-                stroke="#0891b2"
-                strokeWidth={2.5}
-                dot={false}
-                activeDot={{ r: 4 }}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
+        <TrendChart
+          title="Soil & Water Monitoring"
+          icon={Droplets}
+          iconColor="#16a34a"
+          history={history}
+          lines={[
+            {
+              key: 'moisture',
+              name: 'Soil Moisture %',
+              color: '#16a34a'
+            },
+            {
+              key: 'waterLevel',
+              name: 'Water Level cm',
+              color: '#0891b2'
+            }
+          ]}
+        />
       </div>
 
-      {/* =====================================================
-          Bottom Field Health Overview
-      ===================================================== */}
-
-      <div
-        style={{
-          background: '#ffffff',
-          border: '1px solid #e5e7eb',
-          borderRadius: '18px',
-          padding: '19px 22px',
-          boxShadow: '0 3px 12px rgba(15,23,42,0.05)',
-          marginBottom: '10px',
-        }}
-      >
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '12px',
-            flexWrap: 'wrap',
-          }}
-        >
-          <div
-            style={{
-              width: '40px',
-              height: '40px',
-              borderRadius: '12px',
-              background: '#f0fdf4',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0,
-            }}
-          >
-            <Sprout
-              style={{
-                width: '20px',
-                height: '20px',
-                color: '#16a34a',
-              }}
-            />
+      {/* Field Health Overview */}
+      <div style={{
+        ...cardStyle,
+        marginBottom: '10px'
+      }}>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          flexWrap: 'wrap'
+        }}>
+          <div style={{
+            padding: '10px',
+            borderRadius: '12px',
+            background: '#f0fdf4'
+          }}>
+            <Sprout size={20} color="#16a34a" />
           </div>
 
           <div style={{ flex: 1, minWidth: '180px' }}>
-            <div
-              style={{
-                fontSize: '13px',
-                fontWeight: 700,
-                color: '#0f172a',
-              }}
-            >
-              Field Health Overview
-            </div>
-
-            <div
-              style={{
-                fontSize: '10px',
-                color: '#94a3b8',
-                marginTop: '3px',
-              }}
-            >
+            <div style={titleStyle}>Field Health Overview</div>
+            <div style={{
+              fontSize: '10px',
+              color: '#94a3b8'
+            }}>
               Real-time sensor condition summary
             </div>
           </div>
 
           {[
-            {
-              label: 'Temperature',
-              ok: temperatureOk,
-            },
-            {
-              label: 'Humidity',
-              ok: humidityOk,
-            },
-            {
-              label: 'Soil Moisture',
-              ok: moistureOk,
-            },
-            {
-              label: 'Water Level',
-              ok: waterOk,
-            },
-          ].map(({ label, ok }) => (
-            <div
-              key={label}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '7px 10px',
-                background: ok ? '#f0fdf4' : '#fef2f2',
-                borderRadius: '999px',
-                border: `1px solid ${ok ? '#dcfce7' : '#fecaca'
-                  }`,
-              }}
-            >
-              <span
-                style={{
-                  width: '7px',
-                  height: '7px',
-                  borderRadius: '50%',
-                  backgroundColor: ok
-                    ? '#16a34a'
-                    : '#ef4444',
-                }}
-              />
-
-              <span
-                style={{
-                  fontSize: '10px',
-                  fontWeight: 600,
-                  color: ok ? '#15803d' : '#dc2626',
-                }}
-              >
-                {label}
-              </span>
-            </div>
+            { label: 'Temperature', ok: temperatureOk },
+            { label: 'Humidity', ok: humidityOk },
+            { label: 'Soil Moisture', ok: moistureOk },
+            { label: 'Water Level', ok: waterOk }
+          ].map(item => (
+            <span key={item.label} style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '7px 10px',
+              background: !hasData ? '#f1f5f9' :
+                item.ok ? '#f0fdf4' : '#fef2f2',
+              borderRadius: '999px',
+              color: !hasData ? '#64748b' :
+                item.ok ? '#15803d' : '#dc2626',
+              fontSize: '10px',
+              fontWeight: 600
+            }}>
+              ● {item.label}
+            </span>
           ))}
         </div>
       </div>
 
-      {/* =====================================================
-          Footer status
-      ===================================================== */}
-
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '6px',
-          padding: '5px',
-          color: '#94a3b8',
-          fontSize: '10px',
-        }}
-      >
-        <CheckCircle2
-          style={{
-            width: '12px',
-            height: '12px',
-            color: '#22c55e',
-          }}
-        />
-
-        AgroEye IoT monitoring system · Real-time data connected
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '6px',
+        padding: '8px',
+        color: '#94a3b8',
+        fontSize: '10px'
+      }}>
+        <CheckCircle2 size={12} color="#22c55e" />
+        AgroEye IoT monitoring system · Firebase Realtime Database
       </div>
     </div>
   );
